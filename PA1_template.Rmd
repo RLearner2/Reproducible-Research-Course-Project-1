@@ -1,0 +1,128 @@
+---
+title: "Working_Code_File.Rmd"
+author: "Brad Kruse"
+date: "5/24/2020"
+output: html_document
+---
+
+### Directions
+
+Commit containing full submission
+
+1.  Code for reading in the dataset and/or processing the data
+2.  Histogram of the total number of steps taken each day
+3.  Mean and median number of steps taken each day
+4.  Time series plot of the average number of steps taken
+5.  The 5-minute interval that, on average, contains the maximum number
+    of steps
+6.  Code to describe and show a strategy for imputing missing data
+7.  Histogram of the total number of steps taken each day after missing
+    values are imputed
+8.  Panel plot comparing the average number of steps taken per 5-minute
+    interval across weekdays and weekends
+9.  All of the R code needed to reproduce the results (numbers, plots,
+    etc.) in the report
+
+### Part 1: Code for reading in the dataset and/or processing the data
+```{r Import_and_Setup_Data, echo = TRUE, message = FALSE, warning = FALSE}
+fileURL <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+download.file(fileURL, destfile = "Dataset.zip")
+unzip("Dataset.zip")
+stepsdata <- read.csv("activity.csv", header = TRUE, stringsAsFactors = FALSE)
+stepsdata$date <-as.Date(stepsdata$date)
+```
+
+#### Examining the characteristics of the imported data file
+```{r Checking_raw_data, echo = TRUE, message = FALSE, warning = FALSE}
+dim(stepsdata)
+summary(stepsdata)
+head(stepsdata)
+```
+### Part 2: Histogram of the total number of steps taken each day
+```{r Histogram_1_Steps_Per_Day, echo = TRUE, message = FALSE, warning = FALSE}
+library(ggplot2)
+HPlot1 <- ggplot(stepsdata, aes(factor(date), steps), na.rm = TRUE) +
+        geom_histogram(binwidth = 2000, fill = "red2", colour = "slategray", size = .1,
+        stat = "identity") +
+        xlab('Date') +
+        ylab('Number of Steps Taken Each Day') +
+        theme(axis.text.x = element_text(angle=90, hjust=1, vjust=1)) +
+        ggtitle('Histogram of the Total Number of Steps Taken Each Day')
+print(HPlot1)
+```
+
+
+### Part 3: Mean and median number of steps taken each day
+* The mean number of steps per day is 10766.19 and the median is 10765.  
+```{r Mean_And_Median_Steps_per_Day, echo = TRUE, message = FALSE, warning = FALSE}
+stepsperday <- aggregate(steps~date, stepsdata, FUN = sum)
+stepsmean <- mean(stepsperday$steps)
+stepsmedian <- median(stepsperday$steps)
+round(stepsmean, digits = 2)
+round(stepsmedian, digits = 2)
+```
+### Part 4: Time series plot of the average number of steps taken
+* Line plot showing the average daily activity pattern.  
+```{r Time_Series_of_the_Average_Steps_per_Day, echo = TRUE, message = FALSE, warning = FALSE}
+stepsperinterval <- aggregate(steps~interval, stepsdata, FUN = mean)
+plot(stepsperinterval$steps~stepsperinterval$interval, type = "l", xlab = "Interval",
+     ylab = "Average steps per 5 minute interval")
+```
+
+### Part 5: The 5-minute interval that, on average, contains the maximum number of steps
+* The 5-minute interval that contains the highest number of steps, on average, is interval 835 with 206.1968 steps. 
+
+```{r Five_Minute_Interval_with_the_most_steps, echo = TRUE, message = FALSE, warning = FALSE}
+    maxinterval <-stepsperinterval[stepsperinterval$steps==max(stepsperinterval$steps),]
+    print(maxinterval)
+```
+
+### Part 6: Code to describe and show a strategy for imputing missing data
+
+* Using the MICE Package to impute the mean steps by interval.  Specifying (method = “mean”) and constraining the MICE function to one iteration provides the mean being imputed for missing data.  
+* The number of missing values in the data file is 2304.
+* The mean number of steps in the imputed data set is 10766.19 and the median is also 10766.19. The effect of imputing the mean to the missing data in the data file makes both the mean and the median equal to the mean of the data prior to the mean being imputed to the missing data. The closeness of the mean prior to the mean imputation and the mean and median after the mean imputation implies that the missing data is distributed evenly around the mean of the distribution.
+
+```{r Imputing_the_Mean_for_Missing_Data, echo = TRUE, message = FALSE, warning = FALSE}
+library(mice)
+imp_adata <- mice(stepsdata, method = "mean", m = 1, maxit = 1)
+bdata <- complete(imp_adata, 1)
+steps_imp <- aggregate(steps~date, bdata, FUN = sum)
+stepsimpmean <- mean(steps_imp$steps)
+stepsimpmedian <- median(steps_imp$steps)
+round(stepsimpmean, digits = 2)
+round(stepsimpmedian, digits = 2)
+sum(is.na(stepsdata))
+```
+
+### Part 7: Histogram of the total number of steps taken each day after missing values are imputed
+```{r Histogram_2_Steps_Per_Day_with_Mean_Imputed, echo = TRUE, message = FALSE, warning = FALSE}
+HPlot2 <- ggplot(bdata, aes(factor(date), steps), na.rm = TRUE) +
+        geom_histogram(binwidth = 2000, fill = "green3", colour = "slategray", size = .1,
+        stat = "identity") +
+        xlab('Date') +
+        ylab('Number of Steps Taken Each Day') +
+        theme(axis.text.x = element_text(angle=90, hjust=1, vjust=1)) +
+        ggtitle('Histogram of the Total Number of Steps Taken Each Day with Imputed Mean')
+print(HPlot2)
+```
+
+### Part 8: Panel plot comparing the average number of steps taken per 5 minute interval across weekdays and weekends
+#### Create a new factor variable in the data set with two levels, “weekday” and “weekend”
+```{r Create_Weekend_and_Weekday_Factor, echo = TRUE, message = FALSE, warning = FALSE}
+bdata$date <- as.Date(bdata$date)
+weekdays1 <- c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday')
+bdata$wDay <- factor((weekdays(bdata$date) %in% weekdays1), 
+             levels=c(FALSE, TRUE), labels=c('weekend', 'weekday'))
+```
+#### Make a panel plot containing a time series plot (i.e. type = “l”) of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days
+```{r Plot_Steps_Per_Weekend_and_Weekday_Days, echo = TRUE, message = FALSE, warning = FALSE}
+stepsperWdayWend <- aggregate(steps~interval + wDay, bdata, FUN = mean)
+library(lattice)
+xyplot(steps~interval | factor (wDay),
+           data = stepsperWdayWend,
+           layout = c(1,2),
+           xlab = "Interval",
+           ylab = "Number of Steps",
+           type = "l")
+```
